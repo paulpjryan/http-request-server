@@ -137,12 +137,12 @@ void processRequest( int fd )
     		length++;
     		lastChar = newChar;
   	}
-	printf("request: %s\n", request);
+	//printf("request: %s\n", request);
 	lastChar = 0;
 	int consec = 2;
 	while (( n = read( fd, &newChar, sizeof(newChar) )) > 0 )
 	{	
-		printf("Entering while loop, consec = %d\n", consec);
+		//printf("Entering while loop, consec = %d\n", consec);
 		if (consec % 2 == 0 && newChar == '\r') { consec++; }
 		else if (consec % 2 == 1 && newChar == '\n') {consec++; }
 		else { consec = 0; }
@@ -162,16 +162,16 @@ void processRequest( int fd )
 		}*/
     		lastChar = newChar;
 	}
-	printf("AFTER WHILE LOOP\n");
+	//printf("AFTER WHILE LOOP\n");
 	sscanf(request, "GET %s %*s", docpath);
   	// Add null character at the end of the string
   	docpath[ length ] = 0;
 
 	//TEST that docpath is being cut out
-	printf("=======================================\n");
-	printf("Request\n");
-	printf("=======================================\n");
-	printf("Document path: %s\n", docpath);
+	//printf("=======================================\n");
+	//printf("Request\n");
+	//printf("=======================================\n");
+	//printf("Document path: %s\n", docpath);
 
 	//Map docpath to real file
 	char cwd[256] = {0};
@@ -202,7 +202,7 @@ void processRequest( int fd )
 			
 		}
 		begins[i] = 0;
-		printf("Docpath begins with: %s\n", begins);
+		//printf("Docpath begins with: %s\n", begins);
 		if(!strcmp(begins, "icons") || !strcmp(begins, "htdocs"))
 		{
 			printf("In if\n");
@@ -216,27 +216,34 @@ void processRequest( int fd )
 			strcat(cwd, docpath);
 		}
 	}
-	printf("cwd = %s\n", cwd);
+	//printf("cwd = %s\n", cwd);
 	//TODO expand filepath
 
 	//Detemine content type
 	char * ends;
 	char contentType[48];
 	ends = strchr(cwd, '.');
-	printf("Docpath ends with: %s\n", ends);
-	if(!strcmp(ends, ".html") || !strcmp(ends, ".html/"))
+	if(ends != NULL)
 	{
-		strcpy(contentType, "text/html");
-	}
-	else if(!strcmp(ends, ".gif") || !strcmp(ends, ".gif/"))
-	{
-		strcpy(contentType, "image/gif");
+		//printf("Docpath ends with: %s\n", ends);
+		if(!strcmp(ends, ".html") || !strcmp(ends, ".html/"))
+		{
+			strcpy(contentType, "text/html");
+		}
+		else if(!strcmp(ends, ".gif") || !strcmp(ends, ".gif/"))
+		{
+			strcpy(contentType, "image/gif");
+		}
+		else
+		{
+			strcpy(contentType, "text/plain");
+		}
+		//printf("Content Type: %s\n", contentType);
 	}
 	else
 	{
 		strcpy(contentType, "text/plain");
 	}
-	printf("Content Type: %s\n", contentType);
 
 	//Open file
 	const char * crlf = "\r\n";
@@ -247,12 +254,11 @@ void processRequest( int fd )
 	
 	int file;
 	file = open(cwd, O_RDONLY, 0600);
-	printf("File descriptor: %d\n", file);
+	//printf("File descriptor: %d\n", file);
 	//Send 404 if file isn't found
 	//fd = 1;
 	if(file < 0)
 	{ 
-		printf("\n");
 		const char * notFound = "File not Found";
 		write(fd, protocol, strlen(protocol));
 		write(fd, space, 1);
@@ -275,6 +281,34 @@ void processRequest( int fd )
 	}
 	
 	//TODO send HTTP reply header
+	else
+	{
+		write(fd, protocol, strlen(protocol));
+		write(fd, space, 1);
+		write(fd, "200", 3);
+		write(fd, space, 1);
+		write(fd, "Document", 8);
+		write(fd, space, 1);
+		write(fd, "follows", 7);
+		write(fd, crlf, 2);
+		write(fd, "Server:", 7);
+		write(fd, space, 1);
+		write(fd, serverType, strlen(serverType));
+		write(fd, crlf, 2);
+		write(fd, "Content-type:", 13);
+		write(fd, space, 1);
+		write(fd, contentType, strlen(contentType));
+		write(fd, crlf, 2);
+		write(fd, crlf, 2);
+		
+		char buffer[1024];
+		unsigned int cnt;
+		while((cnt = read(file, buffer, 1024)))
+		{
+			write(fd, buffer, cnt);
+		}
+		
+	}
 	//TODO add concurrency
 	//TODO part 2
 	
