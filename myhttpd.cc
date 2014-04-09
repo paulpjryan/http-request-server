@@ -1,7 +1,7 @@
 
 const char * usage =
 "                                                               \n"
-"myhttpd:                                                \n"
+"myhttpd:                                                	\n"
 "                                                               \n"
 "Simple server program that shows how to use socket calls       \n"
 "in the server side.                                            \n"
@@ -10,18 +10,15 @@ const char * usage =
 "                                                               \n"
 "   daytime-server <port>                                       \n"
 "                                                               \n"
-"Where 1024 < port < 65536.             \n"
+"Where 1024 < port < 65536.             			\n"
 "                                                               \n"
-"In another window type:                                       \n"
+"In another window type:                                       	\n"
 "                                                               \n"
 "   telnet <host> <port>                                        \n"
 "                                                               \n"
-"where <host> is the name of the machine where daytime-server  \n"
-"is running. <port> is the port number you used when you run   \n"
-"daytime-server.                                               \n"
-"                                                               \n"
-"Then type your name and return. You will get a greeting and   \n"
-"the time of the day.                                          \n"
+"where <host> is the name of the machine where daytime-server  	\n"
+"is running. <port> is the port number you used when you run   	\n"
+"daytime-server.                                          	\n"
 "                                                               \n";
 
 
@@ -33,7 +30,7 @@ const char * usage =
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <time.h>
+#include <fcntl.h>
 
 int QueueLength = 5;
 
@@ -144,13 +141,15 @@ void processRequest( int fd )
     		length++;
     		lastChar = newChar;
   	}
-	sscanf(request, "%*s %s %*s", docpath);
+	sscanf(request, "GET %s %*s", docpath);
 
   	// Add null character at the end of the string
   	docpath[ length ] = 0;
 
 	//TEST that docpath is being cut out
-	printf("Request:\n%s\n", request);
+	printf("=======================================\n");
+	printf("Request\n");
+	printf("=======================================\n");
 	printf("Document path: %s\n", docpath);
 
 	//Map docpath to real file
@@ -160,13 +159,102 @@ void processRequest( int fd )
 	if(!strcmp(docpath, "/"))
 	{
 		strcat(cwd, "/http-root-dir/htdocs/index.html");
-		printf("cwd = %s\n", cwd);
+	} 
+	else
+	{
+		char begins[48];
+		int i = 0;
+		//sscanf(docpath, "%s/%*s", begins);
+		char * tmp = docpath;
+		tmp++;
+		while(*tmp)
+		{
+			if(*tmp == '/')
+			{
+				break;
+			}
+			else
+			{
+				begins[i++] = *tmp;
+			}
+			tmp++;
+			
+		}
+		begins[i] = 0;
+		printf("Docpath begins with: %s\n", begins);
+		if(!strcmp(begins, "icons") || !strcmp(begins, "htdocs"))
+		{
+			printf("In if\n");
+			strcat(cwd, "/http-root-dir");
+			strcat(cwd, docpath);
+		}
+
+		else
+		{
+			strcat(cwd, "/http-root-dir/htdocs");
+			strcat(cwd, docpath);
+		}
 	}
-	//TODO other mappings
+	printf("cwd = %s\n", cwd);
 	//TODO expand filepath
-	//TODO detemine content type
-	//TODO open file
+
+	//Detemine content type
+	char * ends;
+	char contentType[48];
+	ends = strchr(cwd, '.');
+	printf("Docpath ends with: %s\n", ends);
+	if(!strcmp(ends, ".html") || !strcmp(ends, ".html/"))
+	{
+		strcpy(contentType, "text/html");
+	}
+	else if(!strcmp(ends, ".gif") || !strcmp(ends, ".gif/"))
+	{
+		strcpy(contentType, "image/gif");
+	}
+	else
+	{
+		strcpy(contentType, "text/plain");
+	}
+	printf("Content Type: %s\n", contentType);
+
+	//Open file
+	const char * crlf = "\r\n";
+	const char * space = " ";
+	
+	const char * protocol = "HTTP/1.1";
+	const char * serverType = "CS 252 lab5";
+	
+	int file;
+	file = open(cwd, O_RDONLY, 0600);
+	printf("File descriptor: %d\n", file);
+	//Send 404 if file isn't found
+	if(file < 0)
+	{ 
+		printf("File not found\n");
+		const char * notFound = "File not Found";
+		write(fd, protocol, strlen(protocol));
+		write(fd, space, 1);
+		write(fd, "404", 3);
+		write(fd, "File", 4);
+		write(fd, "Not", 3);
+		write(fd, "Found", 5);
+		write(fd, crlf, 2);
+		write(fd, "Server:", 7);
+		write(fd, space, 1);
+		write(fd, serverType, strlen(serverType));
+		write(fd, crlf, 2);
+		write(fd, "Content-type:", 13);
+		write(fd, space, 1);
+		write(fd, contentType, strlen(contentType));
+		write(fd, crlf, 2);
+		write(fd, crlf, 2);
+		write(fd, notFound, strlen(notFound));
+	}
+	
 	//TODO send HTTP reply header
 	//TODO add concurrency
 	//TODO part 2
+	
+ 	const char * newline = "\n";
+  	write(fd, newline, strlen(newline));
 }
