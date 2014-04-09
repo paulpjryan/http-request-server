@@ -110,10 +110,6 @@ void processRequest( int fd )
   	char docpath[ maxLength + 1 ];
   	int length = 0;
   	int n;
-
-  	// Send prompt
-  	const char * prompt = "\nType your name:";
-  	write( fd, prompt, strlen( prompt ) );
   
 	// Currently character read
   	unsigned char newChar;
@@ -129,9 +125,9 @@ void processRequest( int fd )
     
   	
   	char request[ maxLength + 1 ];
-	while ( length < maxLength && ( n = read( fd, &newChar, sizeof(newChar) ) ) > 0 ) {
+	while (( n = read( fd, &newChar, sizeof(newChar) ) ) > 0 ) {
 
-    		if ( lastChar == '\015' && newChar == '\012' ) {
+    		if ( lastChar == '\r' && newChar == '\n' ) {
       			// Discard previous <CR> from name
       			length--;
       			break;
@@ -141,8 +137,33 @@ void processRequest( int fd )
     		length++;
     		lastChar = newChar;
   	}
+	printf("request: %s\n", request);
+	lastChar = 0;
+	int consec = 2;
+	while (( n = read( fd, &newChar, sizeof(newChar) )) > 0 )
+	{	
+		printf("Entering while loop, consec = %d\n", consec);
+		if (consec % 2 == 0 && newChar == '\r') { consec++; }
+		else if (consec % 2 == 1 && newChar == '\n') {consec++; }
+		else { consec = 0; }
+		if (consec == 4)
+			break;
+/*
+	if
+		if (consec && lastChar == '\r' && newChar == '\n' ) {
+			break;
+    		}	
+    		else if ( lastChar == '\r' && newChar == '\n' ) {
+			consec = 1;
+    		}
+		else
+		{
+			consec = 0;
+		}*/
+    		lastChar = newChar;
+	}
+	printf("AFTER WHILE LOOP\n");
 	sscanf(request, "GET %s %*s", docpath);
-
   	// Add null character at the end of the string
   	docpath[ length ] = 0;
 
@@ -222,19 +243,21 @@ void processRequest( int fd )
 	const char * space = " ";
 	
 	const char * protocol = "HTTP/1.1";
-	const char * serverType = "CS 252 lab5";
+	const char * serverType = "CS252lab5";
 	
 	int file;
 	file = open(cwd, O_RDONLY, 0600);
 	printf("File descriptor: %d\n", file);
 	//Send 404 if file isn't found
+	//fd = 1;
 	if(file < 0)
 	{ 
-		printf("File not found\n");
+		printf("\n");
 		const char * notFound = "File not Found";
 		write(fd, protocol, strlen(protocol));
 		write(fd, space, 1);
 		write(fd, "404", 3);
+		write(fd, space, 1);
 		write(fd, "File", 4);
 		write(fd, "Not", 3);
 		write(fd, "Found", 5);
