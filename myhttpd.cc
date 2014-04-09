@@ -34,11 +34,13 @@ const char * usage =
 #include <string.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 int QueueLength = 5;
 
 // Processes time request
 void processRequest( int socket );
+void processRequestThread( int fd );
 
 int main( int argc, char ** argv )
 {
@@ -139,8 +141,15 @@ int main( int argc, char ** argv )
 		else if(concurrency == 2)
 		{
 			//thread based
-	    		processRequest( slaveSocket );
-    			close( slaveSocket );	
+			pthread_t t1;
+			pthread_attr_t attr;
+
+			pthread_attr_init( &attr );
+			pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+
+			pthread_create( &t1, &attr, (void * (*)(void *)) processRequestThread, (void *)slaveSocket );
+	    		//processRequest( slaveSocket );
+    			//close( slaveSocket );	
 		}
 		else if(concurrency == 3)
 		{
@@ -151,6 +160,13 @@ int main( int argc, char ** argv )
     		// Close socket
   	}
   
+}
+
+void processRequestThread( int fd )
+{
+	//printf("Thread created %ld\n", pthread_self());
+	processRequest(fd);
+	close(fd);
 }
 
 void processRequest( int fd )
