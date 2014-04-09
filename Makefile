@@ -22,4 +22,5 @@ hello.so: hello.o
 clean:
 	rm -f *.o use-dlopen hello.so
 	rm -f *.o daytime-server
+	rm -f *.o myhttpd
 

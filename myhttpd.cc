@@ -8,9 +8,12 @@ const char * usage =
 "                                                               \n"
 "To use it in one window type:                                  \n"
 "                                                               \n"
-"   daytime-server <port>                                       \n"
+"   ./myhttpd <concurrency mode> <port>                         \n"
 "                                                               \n"
 "Where 1024 < port < 65536.             			\n"
+"Concurrency mode can be -f for forking on each request, 	\n"
+"	-t for a thread for each request, 			\n"
+"	or -p for a pool of threads.				\n"
 "                                                               \n"
 "In another window type:                                       	\n"
 "                                                               \n"
@@ -18,7 +21,7 @@ const char * usage =
 "                                                               \n"
 "where <host> is the name of the machine where daytime-server  	\n"
 "is running. <port> is the port number you used when you run   	\n"
-"daytime-server.                                          	\n"
+"myhttpd.                                          		\n"
 "                                                               \n";
 
 
@@ -39,14 +42,33 @@ void processRequest( int socket );
 
 int main( int argc, char ** argv )
 {
+	int concurrency;
 	// Print usage if not enough arguments
-	if ( argc < 2 ) {
+	if ( argc < 3 ) {
     		fprintf( stderr, "%s", usage );
     		exit( -1 );
   	}
-  
+
+	//Set concurrency mode
+	if(!strcmp(argv[1], "-f"))
+	{
+		concurrency = 1;
+	}
+	else if(!strcmp(argv[1], "-t"))
+	{
+		concurrency = 2;
+	}
+	else if(!strcmp(argv[1], "-t"))
+	{
+		concurrency = 3;
+	}
+	else
+	{
+		concurrency = -1;
+	}
+ 
   	// Get the port from the arguments
-  	int port = atoi( argv[1] );
+  	int port = atoi( argv[2] );
   
   	// Set the IP address and port for this server
   	struct sockaddr_in serverIPAddress; 
@@ -93,12 +115,40 @@ int main( int argc, char ** argv )
       			perror( "accept" );
       			exit( -1 );
     		}
-
-    		// Process request.
-    		processRequest( slaveSocket );
-
+		
+		if(concurrency == -1)
+		{		
+			//sequential
+	    		processRequest( slaveSocket );
+    			close( slaveSocket );
+		}
+		else if(concurrency == 1)
+		{
+			//process based
+			//printf("FORKING\n");
+			pid_t slave = fork();
+			if(slave == 0)
+			{
+	    			processRequest( slaveSocket );
+    				close( slaveSocket );
+				exit(EXIT_SUCCESS);
+			}
+    			
+			close( slaveSocket );	
+		}
+		else if(concurrency == 2)
+		{
+			//thread based
+	    		processRequest( slaveSocket );
+    			close( slaveSocket );	
+		}
+		else if(concurrency == 3)
+		{
+			//pool of threads based
+	    		processRequest( slaveSocket );
+    			close( slaveSocket );	
+		}
     		// Close socket
-    		close( slaveSocket );
   	}
   
 }
@@ -280,7 +330,7 @@ void processRequest( int fd )
 		write(fd, notFound, strlen(notFound));
 	}
 	
-	//TODO send HTTP reply header
+	//Send HTTP reply header
 	else
 	{
 		write(fd, protocol, strlen(protocol));
@@ -301,6 +351,7 @@ void processRequest( int fd )
 		write(fd, crlf, 2);
 		write(fd, crlf, 2);
 		
+		//Write file to fd
 		char buffer[1024];
 		unsigned int cnt;
 		while((cnt = read(file, buffer, 1024)))
