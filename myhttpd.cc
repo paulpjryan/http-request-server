@@ -45,6 +45,13 @@ void poolSlave( int masterSocket );
 
 pthread_mutex_t mutex;
 
+
+const char * crlf = "\r\n";
+const char * space = " ";
+
+const char * protocol = "HTTP/1.1";
+const char * serverType = "CS252lab5";
+
 int main( int argc, char ** argv )
 {
 	int concurrency;
@@ -71,6 +78,7 @@ int main( int argc, char ** argv )
 	{
 		concurrency = -1;
 	}
+	//printf("Concurrency mode: %d\n", concurrency);
  
   	// Get the port from the arguments
   	int port = atoi( argv[2] );
@@ -268,21 +276,43 @@ void processRequest( int fd )
 		lastChar = newChar;
 	}
 	//printf("AFTER WHILE LOOP\n");
-	sscanf(request, "GET %s %*s", docpath);
+	//sscanf(request, "GET %s %*s", docpath);
+	char * tmp = request + 4;
+	//printf("Temp = %s\n", tmp);
+	int ln = 0;
+	while(*tmp)
+	{
+		//printf("Checking character %c\n", *tmp);
+		if(*tmp == ' ')
+		{
+			break;
+		}
+		else
+		{
+			docpath[ln] = *tmp;
+			tmp++;
+			ln++;
+		}
+	}
+
   	// Add null character at the end of the string
-  	docpath[ length ] = 0;
+  	docpath[ ln++ ] = 0;
 
 	//TEST that docpath is being cut out
 	//printf("=======================================\n");
 	//printf("Request\n");
 	//printf("=======================================\n");
 	//printf("Document path: %s\n", docpath);
+	//printf("Request: %s\n", request);
 
 	//Map docpath to real file
 	char cwd[256] = {0};
 	getcwd(cwd, 256);
-	
-	if(!strcmp(docpath, "/"))
+	char root[256];
+	strcpy(root, cwd);
+	strcat(root, "/http-root-dir");
+	//printf("cwd before expansion = %s\n", cwd);
+	if(strcmp(docpath, "/") == 0)
 	{
 		strcat(cwd, "/http-root-dir/htdocs/index.html");
 	} 
@@ -308,6 +338,7 @@ void processRequest( int fd )
 		}
 		begins[i] = 0;
 		//printf("Docpath begins with: %s\n", begins);
+		//printf("Docpath = %s\n", docpath);
 		if(!strcmp(begins, "icons") || !strcmp(begins, "htdocs"))
 		{
 			printf("In if\n");
@@ -322,7 +353,6 @@ void processRequest( int fd )
 		}
 	}
 	//printf("cwd = %s\n", cwd);
-	//TODO expand filepath
 
 	//Detemine content type
 	char * ends;
@@ -350,12 +380,35 @@ void processRequest( int fd )
 		strcpy(contentType, "text/plain");
 	}
 
+	//printf("CWD Length: %ld\nRoot Length: %ld\n", strlen(cwd) , strlen(root));
+	//printf("CWD : %s\n", cwd);
+	//printf("ROOT: %s\n", root);
+	if(strlen(cwd) < strlen(root))
+	{
+		//printf("Sending 404, below root\n");
+		const char * notFound = "File not Found";
+		write(fd, protocol, strlen(protocol));
+		write(fd, space, 1);
+		write(fd, "404", 3);
+		write(fd, space, 1);
+		write(fd, "File", 4);
+		write(fd, "Not", 3);
+		write(fd, "Found", 5);
+		write(fd, crlf, 2);
+		write(fd, "Server:", 7);
+		write(fd, space, 1);
+		write(fd, serverType, strlen(serverType));
+		write(fd, crlf, 2);
+		write(fd, "Content-type:", 13);
+		write(fd, space, 1);
+		write(fd, contentType, strlen(contentType));
+		write(fd, crlf, 2);
+		write(fd, crlf, 2);
+		write(fd, notFound, strlen(notFound));
+		return;
+	}
+
 	//Open file
-	const char * crlf = "\r\n";
-	const char * space = " ";
-	
-	const char * protocol = "HTTP/1.1";
-	const char * serverType = "CS252lab5";
 	
 	int file;
 	file = open(cwd, O_RDONLY, 0600);
@@ -364,6 +417,7 @@ void processRequest( int fd )
 	//fd = 1;
 	if(file < 0)
 	{ 
+		//printf("Sending 404, file open error\n");
 		const char * notFound = "File not Found";
 		write(fd, protocol, strlen(protocol));
 		write(fd, space, 1);
@@ -415,9 +469,16 @@ void processRequest( int fd )
 		}
 		
 	}
-	//TODO add concurrency
 	//TODO part 2
 	
- 	const char * newline = "\n";
-  	write(fd, newline, strlen(newline));
+    	/*Fork child process
+	Set the environment variable REQUEST_METHOD=GET
+	Set the environment variable QUERY_STRING=(arguments after ?)
+	Redirect output of child process to slave socket.
+	Print the following header:
+
+	HTTP/1.1 200 Document follows crlf 
+	Server: Server-Type crlf
+
+	Execute script */
 }
