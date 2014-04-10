@@ -220,6 +220,7 @@ void poolSlave( int masterSocket )
 
 void processRequest( int fd )
 {
+	int cont = 1;
   	// Buffer used to store the name received from the client
   	const int maxLength = 1024;
   	char docpath[ maxLength + 1 ];
@@ -272,8 +273,7 @@ void processRequest( int fd )
 		if (consec == 4)
 		{
 			break;
-		}    		
-		lastChar = newChar;
+		}
 	}
 
 	sscanf(request, "GET %s %*s", docpath);
@@ -348,7 +348,8 @@ void processRequest( int fd )
 		}
 		else if(!strcmp(begins, "cgi-bin"))
 		{
-			printf("CGI BIN REQUEST\n%s\n\n", request);
+			printf("CGI BIN REQUEST\n%s\n", request);
+			
 			//Fork
 			pid_t child = fork();
 			if(child == 0)
@@ -358,9 +359,47 @@ void processRequest( int fd )
 				//redirect output of child to socket
 				//print header
 				//execvp
-				setenv("REQUEST_METHOD", "GET", 1);
+				
+				char * v = strchr(docpath, '?');
+				*v = 0;
+				printf("NEW DOCPATH = %s\n", docpath);
+				int i = 0;
+				if(v != NULL)
+				{
+					v++;
+					setenv("QUERY_STRING", v, 1);
+					setenv("REQUEST_METHOD", "GET", 1);
+				
+					
+				}
+				int stdoutT = dup(1);
+				int realOut;
+				realOut = fd;
+				dup2(realOut, 1);
+				//Print header
+				dprintf(stdoutT, "Printing header\n");
+				write(fd, protocol, strlen(protocol));
+				write(fd, space, 1);
+				write(fd, "200", 3);
+				write(fd, space, 1);
+				write(fd, "Document", 8);
+				write(fd, space, 1);
+				write(fd, "follows", 7);
+				write(fd, crlf, 2);
+				write(fd, "Server:", 7);
+				write(fd, space, 1);
+				write(fd, serverType, strlen(serverType));
+				write(fd, crlf, 2);			
+	
+				dprintf(stdoutT, "Done printing header\n");
+				//EXECUTE
+				execvp(docpath, NULL);
+				//restore stdout
+				dup2(stdoutT, 1);	
+				printf("stdout is working again\n");
 			}
-			//printf("Docpath = %s\n", docpath);
+			else
+				return;
 		}
 
 		else
