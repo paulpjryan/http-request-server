@@ -19,6 +19,10 @@ hello.so: hello.o
 	@echo 'Building $@ from $<'
 	$(CXX) -o $@ -c -I. $<
 
+%.o: %.cpp
+	@echo 'Building $@ from $<'
+	$(CXX) -o $@ -c -I. $<
+
 clean:
 	rm -f *.o use-dlopen hello.so
 	rm -f *.o daytime-server

@@ -95,7 +95,8 @@ int rind(char *s, char c) {
     return -1;
 }
 
-int mygetline(char *s, int n, FILE *f) {
+int my
+(char *s, int n, FILE *f) {
     register int i=0;
 
     while(1) {

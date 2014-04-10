@@ -241,7 +241,7 @@ void processRequest( int fd )
   	
   	char request[ maxLength + 1 ];
 	while (( n = read( fd, &newChar, sizeof(newChar) ) ) > 0 ) {
-
+		//putchar(n);
     		if ( lastChar == '\r' && newChar == '\n' ) {
       			// Discard previous <CR> from name
       			length--;
@@ -252,7 +252,7 @@ void processRequest( int fd )
     		length++;
     		lastChar = newChar;
   	}
-	//printf("request: %s\n", request);
+	printf("request: %s\n", request);
 	lastChar = 0;
 	int consec = 2;
 	while (( n = read( fd, &newChar, sizeof(newChar) )) > 0 )
@@ -275,9 +275,10 @@ void processRequest( int fd )
 		}    		
 		lastChar = newChar;
 	}
-	//printf("AFTER WHILE LOOP\n");
-	//sscanf(request, "GET %s %*s", docpath);
-	char * tmp = request + 4;
+
+	sscanf(request, "GET %s %*s", docpath);
+	
+	/*char * tmp = request + 4;
 	//printf("Temp = %s\n", tmp);
 	int ln = 0;
 	while(*tmp)
@@ -296,7 +297,7 @@ void processRequest( int fd )
 	}
 
   	// Add null character at the end of the string
-  	docpath[ ln++ ] = 0;
+  	docpath[ ln++ ] = 0;*/
 
 	//TEST that docpath is being cut out
 	//printf("=======================================\n");
@@ -321,7 +322,7 @@ void processRequest( int fd )
 		char begins[48];
 		int i = 0;
 		//sscanf(docpath, "%s/%*s", begins);
-		char * tmp = docpath;
+		char * tmp = strdup(docpath);
 		tmp++;
 		while(*tmp)
 		{
@@ -341,9 +342,25 @@ void processRequest( int fd )
 		//printf("Docpath = %s\n", docpath);
 		if(!strcmp(begins, "icons") || !strcmp(begins, "htdocs"))
 		{
-			printf("In if\n");
+			//printf("In if\n");
 			strcat(cwd, "/http-root-dir");
 			strcat(cwd, docpath);
+		}
+		else if(!strcmp(begins, "cgi-bin"))
+		{
+			printf("CGI BIN REQUEST\n%s\n\n", request);
+			//Fork
+			pid_t child = fork();
+			if(child == 0)
+			{
+				//setenv
+				//setenv query string, everything after ? and before ' '
+				//redirect output of child to socket
+				//print header
+				//execvp
+				setenv("REQUEST_METHOD", "GET", 1);
+			}
+			//printf("Docpath = %s\n", docpath);
 		}
 
 		else
