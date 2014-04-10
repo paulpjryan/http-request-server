@@ -41,6 +41,9 @@ int QueueLength = 5;
 // Processes time request
 void processRequest( int socket );
 void processRequestThread( int fd );
+void poolSlave( int masterSocket );
+
+pthread_mutex_t mutex;
 
 int main( int argc, char ** argv )
 {
@@ -60,7 +63,7 @@ int main( int argc, char ** argv )
 	{
 		concurrency = 2;
 	}
-	else if(!strcmp(argv[1], "-t"))
+	else if(!strcmp(argv[1], "-p"))
 	{
 		concurrency = 3;
 	}
@@ -106,59 +109,74 @@ int main( int argc, char ** argv )
     		exit( -1 );
   	}
 
-	//MAIN LOOP
-  	while (1) {
-		// Accept incoming connections
-    		struct sockaddr_in clientIPAddress;
-    		int alen = sizeof( clientIPAddress );
-    		int slaveSocket = accept( masterSocket, (struct sockaddr *)&clientIPAddress, (socklen_t*)&alen);
-
-    		if ( slaveSocket < 0 ) {
-      			perror( "accept" );
-      			exit( -1 );
-    		}
+	//POOL OF THREADS
+	if(concurrency == 3)
+	{
 		
-		if(concurrency == -1)
-		{		
-			//sequential
-	    		processRequest( slaveSocket );
-    			close( slaveSocket );
-		}
-		else if(concurrency == 1)
+		if(pthread_mutex_init(&mutex, NULL) != 0)
 		{
-			//process based
-			//printf("FORKING\n");
-			pid_t slave = fork();
-			if(slave == 0)
-			{
-	    			processRequest( slaveSocket );
-    				close( slaveSocket );
-				exit(EXIT_SUCCESS);
+			perror("Mutex");
+		}
+		pthread_t tid[5];
+		pthread_attr_t attr;
+
+		pthread_attr_init( &attr );
+		pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+
+		int i;
+		for(i = 0; i < 5; i++)
+		{
+			pthread_create(tid + i*sizeof(tid[0]), &attr, (void*(*)(void*))poolSlave,(void*)masterSocket);  
+		}
+		pthread_join(tid[0], NULL); 
+	}
+	else
+	{
+		//MAIN LOOP
+	  	while (1) {
+			// Accept incoming connections
+	    		struct sockaddr_in clientIPAddress;
+	    		int alen = sizeof( clientIPAddress );
+	    		int slaveSocket = accept( masterSocket, (struct sockaddr *)&clientIPAddress, (socklen_t*)&alen);
+
+	    		if ( slaveSocket < 0 ) {
+	      			perror( "accept" );
+	      			exit( -1 );
+	    		}
+		
+			if(concurrency == -1)
+			{		
+				//sequential
+		    		processRequest( slaveSocket );
+	    			close( slaveSocket );
 			}
-    			
-			close( slaveSocket );	
-		}
-		else if(concurrency == 2)
-		{
-			//thread based
-			pthread_t t1;
-			pthread_attr_t attr;
+			else if(concurrency == 1)
+			{
+				//process based
+				pid_t slave = fork();
+				if(slave == 0)
+				{
+		    			processRequest( slaveSocket );
+	    				close( slaveSocket );
+					exit(EXIT_SUCCESS);
+				}
+	    			
+				close( slaveSocket );	
+			}
+			else if(concurrency == 2)
+			{
+				//thread based
+				pthread_t t1;
+				pthread_attr_t attr;
 
-			pthread_attr_init( &attr );
-			pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+				pthread_attr_init( &attr );
+				pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 
-			pthread_create( &t1, &attr, (void * (*)(void *)) processRequestThread, (void *)slaveSocket );
-	    		//processRequest( slaveSocket );
-    			//close( slaveSocket );	
-		}
-		else if(concurrency == 3)
-		{
-			//pool of threads based
-	    		processRequest( slaveSocket );
-    			close( slaveSocket );	
-		}
-    		// Close socket
-  	}
+				pthread_create( &t1, &attr, (void * (*)(void *)) processRequestThread, (void *)slaveSocket );
+			}
+	    		// Close socket
+	  	}
+	}
   
 }
 
@@ -167,6 +185,29 @@ void processRequestThread( int fd )
 	//printf("Thread created %ld\n", pthread_self());
 	processRequest(fd);
 	close(fd);
+}
+
+
+void poolSlave( int masterSocket )
+{
+	//printf("Thread %ld entering main loop\n", pthread_self());
+	while(1)
+	{
+		struct sockaddr_in clientIPAddress;
+    		int alen = sizeof( clientIPAddress );
+		pthread_mutex_lock(&mutex);
+    		int slaveSocket = accept( masterSocket, (struct sockaddr *)&clientIPAddress, (socklen_t*)&alen);
+		pthread_mutex_unlock(&mutex);
+		//printf("Thread %ld accepted!\n", pthread_self());
+    		if ( slaveSocket < 0 ) {
+      			perror( "accept" );
+      			exit( -1 );
+    		}
+
+	
+    		processRequest( slaveSocket );
+		close( slaveSocket );
+	}
 }
 
 void processRequest( int fd )
@@ -208,25 +249,23 @@ void processRequest( int fd )
 	int consec = 2;
 	while (( n = read( fd, &newChar, sizeof(newChar) )) > 0 )
 	{	
-		//printf("Entering while loop, consec = %d\n", consec);
-		if (consec % 2 == 0 && newChar == '\r') { consec++; }
-		else if (consec % 2 == 1 && newChar == '\n') {consec++; }
-		else { consec = 0; }
-		if (consec == 4)
-			break;
-/*
-	if
-		if (consec && lastChar == '\r' && newChar == '\n' ) {
-			break;
-    		}	
-    		else if ( lastChar == '\r' && newChar == '\n' ) {
-			consec = 1;
-    		}
+		if (consec % 2 == 0 && newChar == '\r')
+		{
+			consec++;
+		}
+		else if (consec % 2 == 1 && newChar == '\n')
+		{
+			consec++;
+		}
 		else
 		{
 			consec = 0;
-		}*/
-    		lastChar = newChar;
+		}		
+		if (consec == 4)
+		{
+			break;
+		}    		
+		lastChar = newChar;
 	}
 	//printf("AFTER WHILE LOOP\n");
 	sscanf(request, "GET %s %*s", docpath);
