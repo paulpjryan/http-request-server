@@ -443,7 +443,7 @@ void processRequest( int fd )
 		//Send 404 if file isn't found
 		if(file < 0)
 		{ 
-			printf("Sending 404, file open error\n");
+			//printf("Sending 404, file open error\n");
 			const char * notFound = "File not Found";
 			write(fd, protocol, strlen(protocol));
 			write(fd, space, 1);
