@@ -57,6 +57,11 @@ int main( int argc, char ** argv )
 		}
   		port = atoi( argv[2] );
 	}
+	else
+	{
+		fprintf(stderr, "Cannot have more than 2 arguments!\n");
+		exit(0);
+	}
  
   	// Get the port from the arguments
   
