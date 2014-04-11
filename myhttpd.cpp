@@ -1,30 +1,3 @@
-
-const char * usage =
-"                                                               \n"
-"myhttpd:                                                	\n"
-"                                                               \n"
-"Simple server program that shows how to use socket calls       \n"
-"in the server side.                                            \n"
-"                                                               \n"
-"To use it in one window type:                                  \n"
-"                                                               \n"
-"   ./myhttpd <concurrency mode> <port>                         \n"
-"                                                               \n"
-"Where 1024 < port < 65536.             			\n"
-"Concurrency mode can be -f for forking on each request, 	\n"
-"	-t for a thread for each request, 			\n"
-"	or -p for a pool of threads.				\n"
-"                                                               \n"
-"In another window type:                                       	\n"
-"                                                               \n"
-"   telnet <host> <port>                                        \n"
-"                                                               \n"
-"where <host> is the name of the machine where daytime-server  	\n"
-"is running. <port> is the port number you used when you run   	\n"
-"myhttpd.                                          		\n"
-"                                                               \n";
-
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -46,7 +19,7 @@ void poolSlave( int masterSocket );
 
 pthread_mutex_t mutex;
 
-
+const int defaultport = 5555;
 const char * crlf = "\r\n";
 const char * space = " ";
 
@@ -55,33 +28,37 @@ const char * serverType = "CS252lab5";
 
 int main( int argc, char ** argv )
 {
-	int concurrency;
+	int port;
+	int concurrency = -1;
 	// Print usage if not enough arguments
-	if ( argc < 3 ) {
-    		fprintf( stderr, "%s", usage );
-    		exit( -1 );
-  	}
-
-	//Set concurrency mode
-	if(!strcmp(argv[1], "-f"))
+	if(argc == 1)
 	{
-		concurrency = 1;
+		port = defaultport;
 	}
-	else if(!strcmp(argv[1], "-t"))
+	
+	else if(argc == 2)
 	{
-		concurrency = 2;
+  		port = atoi( argv[1] );
 	}
-	else if(!strcmp(argv[1], "-p"))
+	else if(argc == 3)
 	{
-		concurrency = 3;
-	}
-	else
-	{
-		concurrency = -1;
+		//Set concurrency mode
+		if(!strcmp(argv[1], "-f"))
+		{
+			concurrency = 1;
+		}
+		else if(!strcmp(argv[1], "-t"))
+		{
+			concurrency = 2;
+		}
+		else if(!strcmp(argv[1], "-p"))
+		{
+			concurrency = 3;
+		}
+  		port = atoi( argv[2] );
 	}
  
   	// Get the port from the arguments
-  	int port = atoi( argv[2] );
   
   	// Set the IP address and port for this server
   	struct sockaddr_in serverIPAddress; 
