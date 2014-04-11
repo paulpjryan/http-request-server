@@ -1,12 +1,12 @@
 #!/bin/sh
 
-FINGER=/usr/ucb/finger
+FINGER=/usr/bin/finger
 
 echo Content-type: text/html
 echo
 
 if [ -x $FINGER ]; then
-	if [ $# = 0 ]; then
+	if [ -z "$QUERY_STRING" ]; then
 		cat << EOM
 <HTML><HEAD><TITLE>Finger Gateway</TITLE></HEAD><BODY>
 <H1>Finger Gateway</H1>

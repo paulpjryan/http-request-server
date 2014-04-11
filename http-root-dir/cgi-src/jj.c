@@ -72,7 +72,7 @@ void dump_form() {
     printf("for order to be submitted, otherwise a copy of the order that would have been submitted will%c",LF);
     printf("will be displayed.<P>%c",LF);
     printf("<HR>%c",LF);
-    printf("<FORM ACTION=\"http://hoohoo.ncsa.uiuc.edu:80/htbin/jj\">%c",LF);
+    printf("<FORM ACTION=\"\">%c",LF);
     printf("Password: <INPUT TYPE=\"text\" NAME=\"pwd\" MAXLENGTH=\"20\"><P>%c",LF);
     printf("<H3>Sub Type</H3>%c",LF);
     printf("Select which you would like of the following:<P>%c",LF);

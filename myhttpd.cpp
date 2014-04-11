@@ -35,6 +35,7 @@ const char * usage =
 #include <stdio.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sys/wait.h>
 
 int QueueLength = 5;
 
@@ -78,7 +79,6 @@ int main( int argc, char ** argv )
 	{
 		concurrency = -1;
 	}
-	//printf("Concurrency mode: %d\n", concurrency);
  
   	// Get the port from the arguments
   	int port = atoi( argv[2] );
@@ -190,7 +190,6 @@ int main( int argc, char ** argv )
 
 void processRequestThread( int fd )
 {
-	//printf("Thread created %ld\n", pthread_self());
 	processRequest(fd);
 	close(fd);
 }
@@ -198,7 +197,6 @@ void processRequestThread( int fd )
 
 void poolSlave( int masterSocket )
 {
-	//printf("Thread %ld entering main loop\n", pthread_self());
 	while(1)
 	{
 		struct sockaddr_in clientIPAddress;
@@ -206,7 +204,6 @@ void poolSlave( int masterSocket )
 		pthread_mutex_lock(&mutex);
     		int slaveSocket = accept( masterSocket, (struct sockaddr *)&clientIPAddress, (socklen_t*)&alen);
 		pthread_mutex_unlock(&mutex);
-		//printf("Thread %ld accepted!\n", pthread_self());
     		if ( slaveSocket < 0 ) {
       			perror( "accept" );
       			exit( -1 );
@@ -220,7 +217,8 @@ void poolSlave( int masterSocket )
 
 void processRequest( int fd )
 {
-	int cont = 1;
+	
+	int cgi = 0;
   	// Buffer used to store the name received from the client
   	const int maxLength = 1024;
   	char docpath[ maxLength + 1 ];
@@ -253,7 +251,7 @@ void processRequest( int fd )
     		length++;
     		lastChar = newChar;
   	}
-	printf("request: %s\n", request);
+
 	lastChar = 0;
 	int consec = 2;
 	while (( n = read( fd, &newChar, sizeof(newChar) )) > 0 )
@@ -278,41 +276,13 @@ void processRequest( int fd )
 
 	sscanf(request, "GET %s %*s", docpath);
 	
-	/*char * tmp = request + 4;
-	//printf("Temp = %s\n", tmp);
-	int ln = 0;
-	while(*tmp)
-	{
-		//printf("Checking character %c\n", *tmp);
-		if(*tmp == ' ')
-		{
-			break;
-		}
-		else
-		{
-			docpath[ln] = *tmp;
-			tmp++;
-			ln++;
-		}
-	}
-
-  	// Add null character at the end of the string
-  	docpath[ ln++ ] = 0;*/
-
-	//TEST that docpath is being cut out
-	//printf("=======================================\n");
-	//printf("Request\n");
-	//printf("=======================================\n");
-	//printf("Document path: %s\n", docpath);
-	//printf("Request: %s\n", request);
-
-	//Map docpath to real file
 	char cwd[256] = {0};
 	getcwd(cwd, 256);
 	char root[256];
 	strcpy(root, cwd);
 	strcat(root, "/http-root-dir");
-	//printf("cwd before expansion = %s\n", cwd);
+	
+
 	if(strcmp(docpath, "/") == 0)
 	{
 		strcat(cwd, "/http-root-dir/htdocs/index.html");
@@ -321,7 +291,6 @@ void processRequest( int fd )
 	{
 		char begins[48];
 		int i = 0;
-		//sscanf(docpath, "%s/%*s", begins);
 		char * tmp = strdup(docpath);
 		tmp++;
 		while(*tmp)
@@ -338,68 +307,75 @@ void processRequest( int fd )
 			
 		}
 		begins[i] = 0;
-		//printf("Docpath begins with: %s\n", begins);
-		//printf("Docpath = %s\n", docpath);
+
 		if(!strcmp(begins, "icons") || !strcmp(begins, "htdocs"))
 		{
-			//printf("In if\n");
 			strcat(cwd, "/http-root-dir");
 			strcat(cwd, docpath);
 		}
 		else if(!strcmp(begins, "cgi-bin"))
 		{
-			printf("CGI BIN REQUEST\n%s\n", request);
+			cgi = 1;
 			
 			//Fork
+			int status;
 			pid_t child = fork();
+			
 			if(child == 0)
 			{
-				//setenv
-				//setenv query string, everything after ? and before ' '
-				//redirect output of child to socket
-				//print header
-				//execvp
-				
-				char * v = strchr(docpath, '?');
-				*v = 0;
-				printf("NEW DOCPATH = %s\n", docpath);
+				setenv("REQUEST_METHOD", "GET", 1);
+				char * v = strchr(docpath, '?');			
+				char newDocpath[128];
+				char * m = docpath;
+				int j = 0;
+				while(*m)
+				{
+					if(*m == '?')
+						break;
+					else
+					{
+						newDocpath[j++] = *m;
+						m++;
+					}			
+				}
+				newDocpath[j] = 0;
+				strcat(cwd, "/http-root-dir");
+				strcat(cwd, newDocpath);
+			
 				int i = 0;
 				if(v != NULL)
 				{
 					v++;
 					setenv("QUERY_STRING", v, 1);
-					setenv("REQUEST_METHOD", "GET", 1);
-				
-					
 				}
+				
 				int stdoutT = dup(1);
-				int realOut;
-				realOut = fd;
-				dup2(realOut, 1);
-				//Print header
-				dprintf(stdoutT, "Printing header\n");
-				write(fd, protocol, strlen(protocol));
-				write(fd, space, 1);
-				write(fd, "200", 3);
-				write(fd, space, 1);
-				write(fd, "Document", 8);
-				write(fd, space, 1);
-				write(fd, "follows", 7);
-				write(fd, crlf, 2);
-				write(fd, "Server:", 7);
-				write(fd, space, 1);
-				write(fd, serverType, strlen(serverType));
-				write(fd, crlf, 2);			
+				dup2(fd, 1);
+				
+				write(1, protocol, strlen(protocol));
+				write(1, space, 1);
+				write(1, "200", 3);
+				write(1, space, 1);
+				write(1, "Document", 8);
+				write(1, space, 1);
+				write(1, "follows", 7);
+				write(1, crlf, 2);
+				write(1, "Server:", 7);
+				write(1, space, 1);
+				write(1, serverType, strlen(serverType));
+				write(1, crlf, 2);		
 	
-				dprintf(stdoutT, "Done printing header\n");
 				//EXECUTE
-				execvp(docpath, NULL);
+				char * cmd[3];
+				cmd[0] = cwd;
+				cmd[1] = getenv("QUERY_STRING");
+				cmd[2] = NULL;
+				execvp(cmd[0], cmd);
 				//restore stdout
-				dup2(stdoutT, 1);	
-				printf("stdout is working again\n");
+				dup2(stdoutT, 1);
+				unsetenv("QUERY_STRING");
+				exit(0);
 			}
-			else
-				return;
 		}
 
 		else
@@ -408,133 +384,115 @@ void processRequest( int fd )
 			strcat(cwd, docpath);
 		}
 	}
-	//printf("cwd = %s\n", cwd);
-
-	//Detemine content type
-	char * ends;
-	char contentType[48];
-	ends = strchr(cwd, '.');
-	if(ends != NULL)
+	if(!cgi)
 	{
-		//printf("Docpath ends with: %s\n", ends);
-		if(!strcmp(ends, ".html") || !strcmp(ends, ".html/"))
+
+		//Detemine content type
+		char * ends;
+		char contentType[48];
+		ends = strchr(cwd, '.');
+		if(ends != NULL)
 		{
-			strcpy(contentType, "text/html");
-		}
-		else if(!strcmp(ends, ".gif") || !strcmp(ends, ".gif/"))
-		{
-			strcpy(contentType, "image/gif");
+			if(!strcmp(ends, ".html") || !strcmp(ends, ".html/"))
+			{
+				strcpy(contentType, "text/html");
+			}
+			else if(!strcmp(ends, ".gif") || !strcmp(ends, ".gif/"))
+			{
+				strcpy(contentType, "image/gif");
+			}
+			else
+			{
+				strcpy(contentType, "text/plain");
+			}
 		}
 		else
 		{
 			strcpy(contentType, "text/plain");
 		}
-		//printf("Content Type: %s\n", contentType);
-	}
-	else
-	{
-		strcpy(contentType, "text/plain");
-	}
 
-	//printf("CWD Length: %ld\nRoot Length: %ld\n", strlen(cwd) , strlen(root));
-	//printf("CWD : %s\n", cwd);
-	//printf("ROOT: %s\n", root);
-	if(strlen(cwd) < strlen(root))
-	{
-		//printf("Sending 404, below root\n");
-		const char * notFound = "File not Found";
-		write(fd, protocol, strlen(protocol));
-		write(fd, space, 1);
-		write(fd, "404", 3);
-		write(fd, space, 1);
-		write(fd, "File", 4);
-		write(fd, "Not", 3);
-		write(fd, "Found", 5);
-		write(fd, crlf, 2);
-		write(fd, "Server:", 7);
-		write(fd, space, 1);
-		write(fd, serverType, strlen(serverType));
-		write(fd, crlf, 2);
-		write(fd, "Content-type:", 13);
-		write(fd, space, 1);
-		write(fd, contentType, strlen(contentType));
-		write(fd, crlf, 2);
-		write(fd, crlf, 2);
-		write(fd, notFound, strlen(notFound));
-		return;
-	}
-
-	//Open file
-	
-	int file;
-	file = open(cwd, O_RDONLY, 0600);
-	//printf("File descriptor: %d\n", file);
-	//Send 404 if file isn't found
-	//fd = 1;
-	if(file < 0)
-	{ 
-		//printf("Sending 404, file open error\n");
-		const char * notFound = "File not Found";
-		write(fd, protocol, strlen(protocol));
-		write(fd, space, 1);
-		write(fd, "404", 3);
-		write(fd, space, 1);
-		write(fd, "File", 4);
-		write(fd, "Not", 3);
-		write(fd, "Found", 5);
-		write(fd, crlf, 2);
-		write(fd, "Server:", 7);
-		write(fd, space, 1);
-		write(fd, serverType, strlen(serverType));
-		write(fd, crlf, 2);
-		write(fd, "Content-type:", 13);
-		write(fd, space, 1);
-		write(fd, contentType, strlen(contentType));
-		write(fd, crlf, 2);
-		write(fd, crlf, 2);
-		write(fd, notFound, strlen(notFound));
-	}
-	
-	//Send HTTP reply header
-	else
-	{
-		write(fd, protocol, strlen(protocol));
-		write(fd, space, 1);
-		write(fd, "200", 3);
-		write(fd, space, 1);
-		write(fd, "Document", 8);
-		write(fd, space, 1);
-		write(fd, "follows", 7);
-		write(fd, crlf, 2);
-		write(fd, "Server:", 7);
-		write(fd, space, 1);
-		write(fd, serverType, strlen(serverType));
-		write(fd, crlf, 2);
-		write(fd, "Content-type:", 13);
-		write(fd, space, 1);
-		write(fd, contentType, strlen(contentType));
-		write(fd, crlf, 2);
-		write(fd, crlf, 2);
-		
-		//Write file to fd
-		char buffer[1024];
-		unsigned int cnt;
-		while((cnt = read(file, buffer, 1024)))
+		if(strlen(cwd) < strlen(root))
 		{
-			write(fd, buffer, cnt);
+			//Send 404 if below root
+			const char * notFound = "File not Found";
+			write(fd, protocol, strlen(protocol));
+			write(fd, space, 1);
+			write(fd, "404", 3);
+			write(fd, space, 1);
+			write(fd, "File", 4);
+			write(fd, "Not", 3);
+			write(fd, "Found", 5);
+			write(fd, crlf, 2);
+			write(fd, "Server:", 7);
+			write(fd, space, 1);
+			write(fd, serverType, strlen(serverType));
+			write(fd, crlf, 2);
+			write(fd, "Content-type:", 13);
+			write(fd, space, 1);
+			write(fd, contentType, strlen(contentType));
+			write(fd, crlf, 2);
+			write(fd, crlf, 2);
+			write(fd, notFound, strlen(notFound));
+			return;
 		}
-		
-	}
-	//TODO part 2
+
+		//Open file
 	
-    	/*Fork child process
-	Set the environment variable REQUEST_METHOD=GET
-	Set the environment variable QUERY_STRING=(arguments after ?)
-	Redirect output of child process to slave socket.
-	Print the following header:
-
-	HTTP/1.1 200 Document follows crlf 
-	Server: Server-Type crlf
-
-	Execute script */
+		int file;
+		file = open(cwd, O_RDONLY, 0600);
+		//Send 404 if file isn't found
+		if(file < 0)
+		{ 
+			printf("Sending 404, file open error\n");
+			const char * notFound = "File not Found";
+			write(fd, protocol, strlen(protocol));
+			write(fd, space, 1);
+			write(fd, "404", 3);
+			write(fd, space, 1);
+			write(fd, "File", 4);
+			write(fd, "Not", 3);
+			write(fd, "Found", 5);
+			write(fd, crlf, 2);
+			write(fd, "Server:", 7);
+			write(fd, space, 1);
+			write(fd, serverType, strlen(serverType));
+			write(fd, crlf, 2);
+			write(fd, "Content-type:", 13);
+			write(fd, space, 1);
+			write(fd, contentType, strlen(contentType));
+			write(fd, crlf, 2);
+			write(fd, crlf, 2);
+			write(fd, notFound, strlen(notFound));
+		}
+	
+		//Send HTTP reply header
+		else
+		{
+			write(fd, protocol, strlen(protocol));
+			write(fd, space, 1);
+			write(fd, "200", 3);
+			write(fd, space, 1);
+			write(fd, "Document", 8);
+			write(fd, space, 1);
+			write(fd, "follows", 7);
+			write(fd, crlf, 2);
+			write(fd, "Server:", 7);
+			write(fd, space, 1);
+			write(fd, serverType, strlen(serverType));
+			write(fd, crlf, 2);
+			write(fd, "Content-type:", 13);
+			write(fd, space, 1);
+			write(fd, contentType, strlen(contentType));
+			write(fd, crlf, 2);
+			write(fd, crlf, 2);
+		
+			//Write file to fd
+			char buffer[1024];
+			unsigned int cnt;
+			while((cnt = read(file, buffer, 1024)))
+			{
+				write(fd, buffer, cnt);
+			}
+		}	
+	}
 }
